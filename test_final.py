@@ -9,26 +9,6 @@ import openai
 import requests
 import unicodedata
 from bs4 import BeautifulSoup
-from selenium.webdriver import ChromeOptions, Chrome
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-
-openai.api_key = "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"
-def setup_driver():
-    options = ChromeOptions()
-    options.add_argument("--disable-application-cache")
-    options.add_argument("--disable-cache")
-    options.add_argument("--disk-cache-size=0")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-images")
-    options.add_argument("--blink-settings=imagesEnabled=false")
-    options.add_argument("--enable-precise-geolocation")
-    options.add_argument("--headless")
-    driver = Chrome(options=options)
-
-    return driver
 
 
 def get_json(site, load_json):
@@ -58,14 +38,14 @@ def get_currency(source):
         return currency_code
     return "USD"
 
+
 def extract_ratings(text):
-    pattern = r"\b\d+(\.\d+)?\b"  # Regular expression pattern to match ratings
-    ratings = re.findall(pattern, text)
-    ratings = [float(rating) for rating in ratings]
+    pattern = r"(\d+(\.\d+)?) out of 5"  # Regular expression pattern to match ratings
+    matches = re.findall(pattern, text)
+    ratings = [float(match[0]) for match in matches]
 
     if len(ratings) > 0:
-        average_rating = sum(ratings) / len(ratings)
-        return f"{average_rating}"
+        return ratings[0]
     else:
         return "N/A"
 
@@ -135,6 +115,7 @@ def save_product(file, product, store, currency):
     print("Getting Reviews")
     for review_class in review_classes:
         reviews_containers = soup.find_all('div', attrs={'class': review_class})
+        print(f"Total of {len(reviews_containers)} reviews")
 
         if len(reviews_containers) == 0:
             continue
@@ -142,8 +123,8 @@ def save_product(file, product, store, currency):
         for review in reviews_containers:
             t = review.text.replace("\n", " ").replace(",", " ")
             reviews += f'{t} / '
+            break
 
-        # Append the reviews to the 12th column (index 11) of the corresponding row
         if reviews == '':
             reviews = "N/A"
 
@@ -154,7 +135,7 @@ def save_product(file, product, store, currency):
     soup = BeautifulSoup(description, 'html.parser')
     description = soup.get_text(separator=" ")
 
-    info = [store, f"{store}/products/{product['handle']}", product["title"], prices, currency, op, var, description, product['variants'][0].get("available"), "N/A", extract_ratings(text), reviews]
+    info = [store, f"{store}/products/{product['handle']}", product["title"], prices, currency, op, var, description, product['variants'][0].get("available"), "N/A", extract_ratings(text.decode('utf-8')), reviews]
     info_parsed = []
     for item in info:
         def replace_non_utf8_chars(text):
@@ -215,6 +196,8 @@ def main():
             continue
 
         currency = get_currency(get_json(f"{store}/shop.json", False))
+        if currency is None:
+            currency = "USD"
         print(f"Currency: {currency}")
 
         p_i = 0
@@ -231,7 +214,7 @@ def main():
             # Write the product Info to a .csv file
             print(f"Writing Product Info of: {len(products)}")
             for product in products:
-                save_product("main.csv", product, store, currency)
+                save_product("final.csv", product, store, currency)
             p_i += 1
 
 
