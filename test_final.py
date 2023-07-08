@@ -18,7 +18,11 @@ def get_json(site, load_json):
             proxies.append(f"http://{line.strip()}")
 
     proxy = {'http': random.choice(proxies)}
-    response = requests.get(f"{site}", proxies=proxy)
+    try:
+        response = requests.get(f"{site}", proxies=proxy)
+    except:
+        return None
+
     if load_json:
         try:
             response = json.loads(response.content)
@@ -40,7 +44,7 @@ def get_currency(source):
 
 
 def extract_ratings(text):
-    pattern = r"(\d+(\.\d+)?) out of 5"  # Regular expression pattern to match ratings
+    pattern = r"(\d+(\.\d+)?|\.\d+) out of 5"
     matches = re.findall(pattern, text)
     ratings = [float(match[0]) for match in matches]
 
@@ -54,15 +58,6 @@ def save_product(file, product, store, currency):
     with open("proxies.txt", "r") as f:
         for line in f:
             proxies.append(f"http://{line.strip()}")
-
-    # Define the review classes
-    review_classes = [
-        ["jdgm-rev", "jdgm-divider-top", "jdgm--done-setup"],
-        ["okeReviews-reviews-review"],
-        ['product-review-list-review-container'],
-        ['R-ContentList__item', 'u-textLeft--all'],
-        ['yotpo-review', 'yotpo-regular-box']
-    ]
 
     # Get all the values needed into a list
     prices = ""
@@ -101,32 +96,22 @@ def save_product(file, product, store, currency):
         else:
             op += f' / {option["name"]}'
 
-    text = ''
-    try:
-        proxy = {'http': random.choice(proxies)}
-        response = requests.get(f"{store}/products/{product}", proxies=proxy)
-        text = response.content
-    except:
-        text = ''
-
-    soup = BeautifulSoup(text, 'html.parser')
-    # Iterate over the review classes
-    reviews = ''
-    print("Getting Reviews")
-    for review_class in review_classes:
-        reviews_containers = soup.find_all('div', attrs={'class': review_class})
-        print(f"Total of {len(reviews_containers)} reviews")
-
-        if len(reviews_containers) == 0:
-            continue
-
-        for review in reviews_containers:
-            t = review.text.replace("\n", " ").replace(",", " ")
-            reviews += f'{t} / '
-            break
-
-        if reviews == '':
-            reviews = "N/A"
+    # text = b''
+    # try:
+    #     proxy = {'http': random.choice(proxies)}
+    #     response = requests.get(f"{store}/products/{product}", proxies=proxy)
+    #     text = response.content
+    # except:
+    #     text = b''
+    #
+    # print("Getting Reviews")
+    # pattern = r'\d{1,4}\sreviews'
+    # reviews = re.findall(pattern, f'{text}', re.IGNORECASE)
+    # print(reviews)
+    # if len(reviews) > 0:
+    #     reviews = f'{reviews[0]}'
+    # else:
+    #     reviews = 'N/A'
 
     description = product['body_html']
     if description is None or description == '':
@@ -135,7 +120,7 @@ def save_product(file, product, store, currency):
     soup = BeautifulSoup(description, 'html.parser')
     description = soup.get_text(separator=" ")
 
-    info = [store, f"{store}/products/{product['handle']}", product["title"], prices, currency, op, var, description, product['variants'][0].get("available"), "N/A", extract_ratings(text.decode('utf-8')), reviews]
+    info = [store, f"{store}/products/{product['handle']}", product["title"], prices, currency, op, var, description, product['variants'][0].get("available") if product['variants'][0].get("available") is not None else "N/A" , "N/A", 'N/A', 'N/A']
     info_parsed = []
     for item in info:
         def replace_non_utf8_chars(text):
@@ -200,7 +185,7 @@ def main():
             currency = "USD"
         print(f"Currency: {currency}")
 
-        p_i = 0
+        p_i = 1
         while True:
             print(f"Scraping Products Page: {p_i}")
             response = get_json(f"{store}/products.json?page={p_i}", True)
